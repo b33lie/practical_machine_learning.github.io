@@ -1,0 +1,152 @@
+---
+title: "Quantified Self Movement Data Analysis Report"
+author: "Beelie"
+date: "January 31, 2016"
+output: html_document
+---
+
+There are the Coursera's MOOC Practical Machine Learning from Johns Hopkins University. For more information about the several MOOCs comprised in this Specialization.
+
+GitHub repo: https://github.com/b33lie/practical_machine_learning.github.io
+
+RPubs: http://rpubs.com/b33lie/148703
+
+## Introduction
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. 
+In this project, our goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+## Data Preprocessing
+
+The training data for this project are available at:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available at:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+```{r, error=FALSE}
+library(lattice)
+library(ggplot2)
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(randomForest)
+library(corrplot)
+library(RColorBrewer)
+library(rattle)
+library(utils)
+```
+
+#### Download and Read Data
+Let's download data from link above and read data for processing.
+```{r, error=FALSE}
+trainUrl <-"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+trainFile <- "./data/pml-training.csv"
+testFile  <- "./data/pml-testing.csv"
+if (!file.exists("./data")) {
+  dir.create("./data")
+}
+if (!file.exists(trainFile)) {
+  download.file(trainUrl, destfile=trainFile, method="curl")
+}
+if (!file.exists(testFile)) {
+  download.file(testUrl, destfile=testFile, method="curl")
+}
+trainRaw <- read.csv("./data/pml-training.csv", na.strings=c("NA","#DIV/0!",""))
+testRaw <- read.csv("./data/pml-testing.csv", na.strings=c("NA","#DIV/0!",""))
+dim(trainRaw)
+dim(testRaw)
+```
+The training data set contains 19622 observations and 160 variables, while the testing data set contains 20 observations and 160 variables. The "classe" variable in the training set is the outcome to predict.
+
+
+#### Cleaning Data
+Next, we will clean the data and get rid of observations with missing values as well as some meaningless variables.
+
+First, we remove columns that contain NA missing values.
+```{r}
+sum(complete.cases(trainRaw))
+trainRaw <- trainRaw[, colSums(is.na(trainRaw)) == 0] 
+testRaw <- testRaw[, colSums(is.na(testRaw)) == 0] 
+```
+Next, we get rid of some columns that do not contribute much to the accelerometer measurements.
+```{r}
+classe <- trainRaw$classe
+trainRemove <- grepl("^X|timestamp|window", names(trainRaw))
+trainRaw <- trainRaw[, !trainRemove]
+trainCleaned <- trainRaw[, sapply(trainRaw, is.numeric)]
+dim(trainCleaned)
+trainCleaned$classe <- classe
+testRemove <- grepl("^X|timestamp|window", names(testRaw))
+testRaw <- testRaw[, !testRemove]
+testCleaned <- testRaw[, sapply(testRaw, is.numeric)]
+dim(testCleaned)
+```
+Now, the cleaned training data set contains 19622 observations and 53 variables, while the testing data set contains 20 observations and 53 variables. The "classe" variable is still in the cleaned training set.
+
+#### Partioning Data
+Now we partionaing cleaned training set into a pure training data set (70%) and a validation data set (30%). We will use the validation data set to conduct cross validation in future steps.
+
+```{r, error=FALSE}
+set.seed(22519) # For reproducibile purpose
+inTrain <- createDataPartition(trainCleaned$classe, p=0.70, list=FALSE)
+trainData <- trainCleaned[inTrain, ]
+testData <- trainCleaned[-inTrain, ]
+dim(trainData)
+dim(testData)
+```
+Now, we has pure training data set contains 13737 observations and 53 variables and validation data set contains 5885 observations and 53 variables.
+
+
+## Data Modeling
+
+#### ML algorithms for perdiction : Decision Tree
+
+```{r, error=FALSE}
+modFitA1 <- rpart(classe ~ ., data=trainData, method="class")
+fancyRpartPlot(modFitA1)
+```
+
+Predicting:
+```{r, error=FALSE}
+predictionsA1 <- predict(modFitA1, testData, type = "class")
+```
+we estimate the performance of the model on the validation dataset.
+```{r, error=FALSE}
+# Confusion Matrix
+confusionMatrix(predictionsA1, testData$classe)
+accuracyA1 <- postResample(predictionsA1, testData$classe)
+accuracyA1
+ooseA1 <- 1 - as.numeric(confusionMatrix(testData$classe, predictionsA1)$overall[1])
+ooseA1
+```
+So, the estimated accuracy of the model is 75.62% and the estimated out-of-sample error is 24.38%.
+
+#### ML algorithms for perdiction : Random Forests
+
+```{r, error=FALSE}
+modFitB1 <- randomForest(classe ~. , data=trainData)
+```
+Predicting in-sample error:
+```{r, error=FALSE}
+predictionsB1 <- predict(modFitB1, testData, type = "class")
+```
+we estimate the performance of the model on the validation dataset.
+```{r, error=FALSE}
+# Confusion Matrix
+confusionMatrix(predictionsB1, testData$classe)
+accuracyB1 <- postResample(predictionsB1, testData$classe)
+accuracyB1
+ooseB1 <- 1 - as.numeric(confusionMatrix(testData$classe, predictionsB1)$overall[1])
+ooseB1
+```
+So, the estimated accuracy of the model is 99.5% and the estimated out-of-sample error is 0.49%.
+
+## Predicting for Test Data Set
+Now, we apply the model to the original testing data set downloaded from the data source.
+```{r, error=FALSE}
+result <- predict(modFitB1, testCleaned[, -length(names(testCleaned))])
+result
+```
