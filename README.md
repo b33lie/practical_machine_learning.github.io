@@ -1,7 +1,7 @@
 # Practical Machine Learning Course - Quantified Self Movement Data Analysis Report
 There are the Coursera’s MOOC Practical Machine Learning from Johns Hopkins University. For more information about the several MOOCs comprised in this Specialization.
 
-GitHub repo: https://github.com/b33lie/Practical-Machine-Learning/
+GitHub repo: https://github.com/b33lie/practical_machine_learning.github.io/tree/gh-pages
 
 RPubs: http://rpubs.com/b33lie/148703
 
